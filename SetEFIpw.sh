@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -x
 
 # Script to implement an EFI password policy on a Casper Mac running 10.8 or better.
 
@@ -9,13 +9,11 @@
 
 # Set up path variables for easy access and change
 
-MLtoolpath="/Volumes/Mac OS X Base System/Applications/Utilities/Firmware Password Utility.app/Contents/Resources/"
-MLbasesysmnt="/Volumes/Mac OS X Base System/"
+MLmntpath='/Volumes/Mac OS X Base System'
+MVmntpath='/Volumes/OS X Base System'
 
-MVtoolpath="/Volumes/OS X Base System/Applications/Utilities/Firmware Password Utility.app/Contents/Resources/"
-MVbasesysmnt="/Volumes/OS X Base System/"
-
-basesyspath="/Volumes/Recovery HD/com.apple.recovery.boot/BaseSystem.dmg"
+toolpath='Applications/Utilities/Firmware Password Utility.app/Contents/Resources/setregproptool'
+basesyspath='/Volumes/Recovery HD/com.apple.recovery.boot/BaseSystem.dmg'
 recoverypath="Recovery HD"
 
 # Set up working variables from info passed to the script
@@ -37,31 +35,41 @@ oldpassword=$6
 # command	- This only requires password entry if boot picker is invoked with alt key.
 securitymode=$7
 
-# Ok now let's set up the functions in bash to open and close the recovery partition. OS specific.
-
-function MLopenrecovery {
-	/usr/sbin/diskutil mount "$recoverypath"
-	/usr/bin/hdiutil attach -quiet "$basesyspath"
-}
-
-function MLcloserecovery {
-	/usr/bin/hdiutil detach "$basesysmnt"
-	/usr/sbin/diskutil unmount "$recoverypath"
-}
-
-function MVopenrecovery {
-	/usr/sbin/diskutil mount "$recoverypath"
-	/usr/bin/hdiutil attach -quiet "$basesyspath"
-}
-
-function MVcloserecovery {
-	/usr/bin/hdiutil detach "$basesysmnt"
-	/usr/sbin/diskutil unmount "$recoverypath"
-}
-
 # Which OS is this running on?
 
 osvers=$( sw_vers -productVersion | awk -F. '{print $2}' )
+
+# Ok now let's set up the functions in bash to open and close the recovery partition.
+
+function openrecovery {
+	if [ ${osvers} -eq 8 ];
+		then
+			/usr/sbin/diskutil mount "$recoverypath"
+			/usr/bin/hdiutil attach -quiet -nobrowse "$basesyspath"
+		elif [ ${osvers} -eq 9 ]
+		then
+			/usr/sbin/diskutil mount "$recoverypath"
+			/usr/bin/hdiutil attach -quiet -nobrowse "$basesyspath"
+		else
+			echo "Error: Mount Recovery Partition: I've no idea what this OS version is! "${osvers}
+			exit 1
+	fi
+}
+
+function closerecovery {
+	if [ ${osvers} -eq 8 ];
+		then
+			/usr/bin/hdiutil detach "$MLmntpath"
+			/usr/sbin/diskutil unmount "$recoverypath"
+		elif [ ${osvers} -eq 9 ]
+		then
+			/usr/bin/hdiutil detach "$MLmntpath"
+			/usr/sbin/diskutil unmount "$recoverypath"
+		else
+			echo "Error: Mount Recovery Partition: I've no idea what this OS version is! "${osvers}
+			exit 1
+	fi
+}
 
 # First of all, check the OS to see if this is supported or not. Less than 10.8 is not supported.
 
@@ -83,38 +91,31 @@ case "$operatingmode" in
 			exit 1
 		fi		
 		
-		if [[ "$securitymode" != "full" || "$securitymode" != "command" ]]; then
+		if [[ "$securitymode" != "full" && "$securitymode" != "command" ]]; then
 			echo "Error: Incorrect security mode specified in policy. e.g. full"
 			exit 1
 		fi				
 
 		# Mount the Recovery partition
 
-		if [[ ${osvers} -eq 8 ]];
-		then
-			MLopenrecovery
-		elif [[ ${osvers} -eq 9 ]];
-			MVopenrecovery
-		else
-			echo "Error: Mount Recovery Partition: I've no idea what this OS version is! "${osvers}
-			exit 1
-		fi
+		openrecovery
 					
 		# Enable the EFI password
 
-		$toolpath/setregproptool -p $newpassword -m $securitymode
+		if [ ${osvers} -eq 8 ];
+			then
+				"$MLmntpath/$toolpath" -p $newpassword -m $securitymode
+			elif [ ${osvers} -eq 9 ]
+			then
+				"$MVmntpath/$toolpath" -p $newpassword -m $securitymode
+			else
+				echo "Error: setregproptool: I've no idea what this OS version is! "${osvers}
+				exit 1
+		fi
 		
 		# Unmount the Recovery partition
 		
-		if [[ ${osvers} -eq 8 ]];
-		then
-			MLcloserecovery
-		elif [[ ${osvers} -eq 9 ]];
-			MVcloserecovery
-		else
-			echo "Error: Dismount Recovery Partition: I've no idea what this OS version is! "${osvers}
-			exit 1
-		fi
+		closerecovery
 
 	;;
 	
@@ -133,33 +134,38 @@ case "$operatingmode" in
 			exit 1
 		fi			
 
+		# Check to see if the security mode has been specified properly. Exit if not as command will fail.
+
+		if [[ "$securitymode" == "" ]]; then
+			echo "Error: Missing security mode in policy. e.g. full"
+			exit 1
+		fi		
+		
+		if [[ "$securitymode" != "full" && "$securitymode" != "command" ]]; then
+			echo "Error: Incorrect security mode specified in policy. e.g. full"
+			exit 1
+		fi	
+
 		# Mount the Recovery partition
 
-		if [[ ${osvers} -eq 8 ]];
-		then
-			MLopenrecovery
-		elif [[ ${osvers} -eq 9 ]];
-			MVopenrecovery
-		else
-			echo "Error: Mount Recovery Partition: I've no idea what this OS version is! "${osvers}
-			exit 1
-		fi
+		openrecovery
 
 		# Change the EFI password
-		
-		$toolpath/setregproptool –p $newpassword -o oldpassword
+
+		if [ ${osvers} -eq 8 ];
+			then
+				"$MLmntpath/$toolpath" -m $securitymode -p $newpassword -o $oldpassword
+			elif [ ${osvers} -eq 9 ]
+			then
+				"$MVmntpath/$toolpath" -m $securitymode -p $newpassword -o $oldpassword
+			else
+				echo "Error: setregproptool: I've no idea what this OS version is! "${osvers}
+				exit 1
+		fi
 		
 		# Unmount the Recovery partition
 		
-		if [[ ${osvers} -eq 8 ]];
-		then
-			MLcloserecovery
-		elif [[ ${osvers} -eq 9 ]];
-			MVcloserecovery
-		else
-			echo "Error: Dismount Recovery Partition: I've no idea what this OS version is! "${osvers}
-			exit 1
-		fi
+		closerecovery
 		
 	;;
 	
@@ -173,31 +179,24 @@ case "$operatingmode" in
 
 		# Mount the Recovery partition
 
-		if [[ ${osvers} -eq 8 ]];
-		then
-			MLopenrecovery
-		elif [[ ${osvers} -eq 9 ]];
-			MVopenrecovery
-		else
-			echo "Error: Mount Recovery Partition: I've no idea what this OS version is! "${osvers}
-			exit 1
-		fi
+		openrecovery
 	
 		# Remove the EFI password
-		
-		$toolpath/setregproptool –d –o oldpassword
 
+		if [ ${osvers} -eq 8 ];
+			then
+				"$MLmntpath/$toolpath" -d -o $oldpassword
+			elif [ ${osvers} -eq 9 ]
+			then
+				"$MVmntpath/$toolpath" -d -o $oldpassword
+			else
+				echo "Error: setregproptool: I've no idea what this OS version is! "${osvers}
+				exit 1
+		fi
+		
 		# Unmount the Recovery partition
 		
-		if [[ ${osvers} -eq 8 ]];
-		then
-			MLcloserecovery
-		elif [[ ${osvers} -eq 9 ]];
-			MVcloserecovery
-		else
-			echo "Error: Dismount Recovery Partition: I've no idea what this OS version is! "${osvers}
-			exit 1
-		fi
+		closerecovery
 			
 	;;
 	
