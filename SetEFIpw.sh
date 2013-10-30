@@ -1,4 +1,4 @@
-#!/bin/bash -x
+#!/bin/bash
 
 # Script to implement an EFI password policy on a Casper Mac running 10.8 or better.
 
