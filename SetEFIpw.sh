@@ -63,7 +63,7 @@ function closerecovery {
 			/usr/sbin/diskutil unmount "$recoverypath"
 		elif [ ${osvers} -eq 9 ]
 		then
-			/usr/bin/hdiutil detach "$MLmntpath"
+			/usr/bin/hdiutil detach "$MVmntpath"
 			/usr/sbin/diskutil unmount "$recoverypath"
 		else
 			echo "Error: Mount Recovery Partition: I've no idea what this OS version is! "${osvers}
